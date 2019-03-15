@@ -500,3 +500,62 @@ $ kubectl -n kube-system get pods
 [2]: http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html
 [3]: https://coding.imooc.com/class/198.html
 
+
+## 附录：新的服务器加入kubernetes集群（根据上方教程整理，随时可补充）
+１、前提：kubernetes　master节点已存在，etcd,apiserver均处于可用状态
+  
+２、下载二进制包及文件
+  ```
+    二进制包在下方git中　kubernetes-bins.tar.gz
+  ```
+  ```#到home目录下载项目
+    $ cd ~
+    $ git clone https://github.com/liuyi01/kubernetes-starter.git
+    #看看git内容
+    $ cd ~/kubernetes-starter && ls
+```
+
+３、解压kubernetes-bins.tar.gz，将目录重命名为bin，建议将此目录放在用户主目录下(~/bin)
+４、生成配置
+  ```
+    cd kubernetes-starter
+    ### 修改配置文件，按文案提示填写master节点等信息
+    vim config.properties
+    ### 生成配置(http方式后跟参数simple,https方式后跟参数with-ca)
+    ./gen-config.sh with-ca
+    
+    执行完毕后将会在kubernetes-starter目录下生成target文件夹
+  ```
+ 5、配置cni网络
+  ```
+    mkdir -p /etc/cni/net.d/
+    cp ~/kubernetes-starter/target/worker-node/10-calico.conf /etc/cni/net.d/
+  ```
+ 6、配置kubelet
+  ```
+    cp ~/kubernetes-starter/target/worker-node/kubelet.service /lib/systemd/system/
+    systemctl daemon-reload
+    service kubelet start
+    
+    journalctl -f查看日志
+    
+    #b启动kubelet之后到master节点允许worker加入(批准worker的tls证书请求)b
+    #--------*在主节点执行*---------
+    $ kubectl get csr|grep 'Pending' | awk '{print $1}'| xargs kubectl certificate approve
+    #-----------------------------
+  ```
+ ７、配置kube-proxy服务
+  ```
+    $ cp ~/kubernetes-starter/target/worker-node/kube-proxy.service /lib/systemd/system/
+    $ systemctl daemon-reload
+
+    #安装依赖软件
+    $ apt install conntrack
+
+    #启动服务
+    $ service kube-proxy start
+    #查看日志
+    $ journalctl -f -u kube-proxy
+  ```
+
+  8、在节点上执行kubectl get node查看节点列表，检查是否成功加入集群
